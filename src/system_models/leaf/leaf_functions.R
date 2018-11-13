@@ -25,6 +25,24 @@ f_R_Brent_solver <- function(.) {
   .$solver_out$root
 }
 
+f_R_Brent_solver_diag <- function(.) {
+  if(.$cpars$verbose_loop) print(.$env) 
+
+  .$solver_out        <- uniroot(get(.$fnames$solver_func),interval=c(-0.002765326,50.1234),.=.,extendInt='downX')
+  .$state$iter[]      <- .$solver_out$iter
+  .$state$estimprec[] <- .$solver_out$estim.prec
+  .$solver_out$root
+}
+
+f_R_Brent_solver_diag_brackets <- function(., brackets ) {
+  if(.$cpars$verbose_loop) print(.$env) 
+
+  .$solver_out        <- uniroot(get(.$fnames$solver_func), interval=brackets, .=., extendInt='downX' )
+  .$state$iter[]      <- .$solver_out$iter
+  .$state$estimprec[] <- .$solver_out$estim.prec
+  .$solver_out$root
+}
+
 
 # Calculate assimilation for a given cc (.$state$cc)
 # - code block common to all assimilation solvers
@@ -229,8 +247,6 @@ f_A_r_leaf_semiana <- function(.) {
       print(paste('New fas,',fa0,fa1,fa2,'; guesses,',a0,a1,a2))
       if( min(fguesses) * max(fguesses) >= 0 ) stop(paste('Solver error: fa0-2 all > or < 0,',fa0,fa1,fa2,'; guesses,',a0,a1,a2))
     } 
-    .$state$aguess[]  <- guesses 
-    .$state$faguess[] <- fguesses
    
     # fit a quadratic through the three sets of co-ordinates a la Lomas (one step of Muller's method) 
     # Muller, David E., "A Method for Solving Algebraic Equations Using an Automatic Computer," Mathematical Tables and Other Aids to Computation, 10 (1956)    
@@ -244,10 +260,98 @@ f_A_r_leaf_semiana <- function(.) {
     .$state$fA_ana_final[2] <- get(.$fnames$solver_func)(., assim[2] ) 
     ss    <- which(assim>min(guesses)&assim<max(guesses))
     
+    .$state$aguess[]  <- c(guesses, assim[ss] ) 
+    .$state$faguess[] <- c(fguesses, get(.$fnames$solver_func)(.,assim[ss]) )
+    
     # catch potential errors
     if(length(ss)==0)      stop('no solution,', assim,'; within initial 3 guesses,',a0,a1,a2,'fguesses,',fa0,fa1,fa2 ) 
     else if(length(ss)==2) stop('both solutions,',assim,'; within initial 3 guesses,',a0,a1,a2,'fguesses,',fa0,fa1,fa2 ) 
     else return(assim[ss])
+  }
+}
+
+# Clean semi-analytical solution 
+f_A_r_leaf_semiana_clean <- function(.) {
+  # - finds the analytical solution assuming rb and ri are zero to use as first guess (a0)
+  # - make a second guess (a1) by calculating Cc using a0 and actual valuesof rb and ri   
+  # - calculate residual function value for these two guesses (fa0, fa1) 
+  # - check to make sure these span the root
+  # - make a third guess (a2) by taking the mean of a0 and a1 and calculate residual (fa2) 
+  # - fit a quadratic through the three sets of co-ordinates to find the root 
+ 
+  # find the analytical solution assuming rb and ri are zero to use as first guess (a0)
+  a0 <- .$state$A_ana_rbzero <- f_A_r_leaf_analytical_quad(.)
+
+  # currently no method to handle a0 < 0 - a0 less than zero should be fine 
+  #if(a0<0) stop('a0 < 0 ,',a0)
+
+  # a0 should mostly be larger than the full solution (unless rb and ri are zero, or A is less than Rd) 
+  # meaning that fa0 should mostly be < 0
+  fa0 <- f_A_r_leaf(., a0 ) 
+ 
+  # just a check, prob not necessary for final version
+  if(is.na(fa0)) {
+    print('')
+    print(c(a0,fa0))
+    print(unlist(.$fnames)); print(unlist(.$pars)); print(unlist(.$state_pars)); print(unlist(.$state)); print(unlist(.$env)) 
+  }
+ 
+  #  
+  if(a0 == 0 ) return(1e-3) 
+  else if(abs(fa0) < 1e-6) return(a0)
+  else {
+ 
+    # second guess, also analytical, use initial guess to calculate cc, then calculate A from this cc value
+    .$state$cc[] <- get(.$fnames$gas_diff)( . , a0, r=( 1.4*.$state_pars$rb + 1.6*get(.$fnames$rs)(.,A=a0,c=get(.$fnames$gas_diff)(.,a0)) + .$state_pars$ri ) )
+    a1           <- f_assimilation(.) 
+    fa1          <- get(.$fnames$solver_func)(., a1 ) 
+
+    # check f(guesses) span zero i.e. that guesses span the root
+    if( fa0 * fa1 >= 0 ) {
+      print(unlist(.$fnames)); print(unlist(.$pars)); print(unlist(.$state_pars)); print(unlist(.$env)) 
+      print(paste('Solver error: fa0 & fa1 both > or < 0,',fa0,fa1,'; guesses,',a0,a1))
+      sinput <- seq(a0-2,a0+2,0.1 )
+      out    <- numeric(length(sinput))
+      for( i in 1:length(sinput) ) {
+        out[i] <- f_A_r_leaf(., A=sinput[i] )
+      }
+      print(cbind(sinput,out))
+      stop('Solver error')      
+    } 
+  
+    # Now brackets are available that span the root of the residual function, find the root
+
+    # use Brent's method
+    semi_ana_brent <- T
+    if(semi_ana_brent) {
+      return( f_R_Brent_solver_diag_brackets(., c(a1,a0) ) )
+    } else {
+      # fit a quadratic through the three sets of co-ordinates a la Lomas (one step of Muller's method) 
+      # third guess
+      a2  <- mean(c(a0,a1))  
+      fa2 <- get(.$fnames$solver_func)(., a2 ) 
+      .$state$aguess[1:3]  <- c(a0,a1,a2)   
+      .$state$faguess[1:3] <- c(fa0,fa1,fa2)   
+  
+      # Muller, David E., "A Method for Solving Algebraic Equations Using an Automatic Computer," Mathematical Tables and Other Aids to Computation, 10 (1956)    
+      bx <- ((a1+a0)*(fa2-fa1)/(a2-a1)-(a2+a1)*(fa1-fa0)/(a1-a0))/(a0-a2)
+      ax <- (fa2-fa1-bx*(a2-a1))/(a2**2-a1**2)
+      cx <- fa1-bx*a1-ax*a1**2
+   
+      # find the root of the quadratic that lies between guesses 
+      assim <- .$state$assim[] <- quad_sol(ax,bx,cx,'both')
+      .$state$fA_ana_final[1] <- get(.$fnames$solver_func)(., assim[1] ) 
+      .$state$fA_ana_final[2] <- get(.$fnames$solver_func)(., assim[2] ) 
+      ss    <- which(assim>min(.$state$aguess[1:3])&assim<max(.$state$aguess[1:3]))
+      
+      .$state$aguess[4]  <- assim[ss]  
+      .$state$faguess[4] <- get(.$fnames$solver_func)(.,assim[ss])
+      
+      # catch potential errors
+      if(length(ss)==0)      stop('no solution,', assim,'; within initial 3 guesses,',a0,a1,a2,'fguesses,',fa0,fa1,fa2 ) 
+      else if(length(ss)==2) stop('both solutions,',assim,'; within initial 3 guesses,',a0,a1,a2,'fguesses,',fa0,fa1,fa2 ) 
+      else return(assim[ss])
+    }
   }
 }
 
@@ -261,8 +365,8 @@ f_A_r_leaf_analytical <- function(.) {
   # combines A, rs, ci, cc eqs to a single f(), 
   # combines all rate limiting processes
   
-  .$state_pars$rb <- 0
-  .$state_pars$ri <- 0
+  #.$state_pars$rb <- 0
+  #.$state_pars$ri <- 0
   
   # calculate cb, ci & cc
   .$state$cb      <- .$state$ca
@@ -288,35 +392,35 @@ f_A_r_leaf_analytical_quad <- function(.) {
 
   # set cb, rb & ri
   .$state$cb[]      <- .$state$ca
-  .$state_pars$rb[] <- 0
-  .$state_pars$ri[] <- 0
+  #.$state_pars$rb[] <- 0
+  #.$state_pars$ri[] <- 0
 
   # correctly assign g0 if rs functions assume g0 = 0
-  g0_hold <- .$pars$g0
-  if(.$fnames$rs=='f_rs_cox1998'|.$fnames$rs=='f_rs_constantCiCa') .$pars$g0[] <- 0 
+  #g0_hold <- .$pars$g0
+  g0 <- if(.$fnames$rs=='f_rs_cox1998'|.$fnames$rs=='f_rs_constantCiCa') 0 else .$pars$g0 
 
   # calculate coefficients of quadratic to solve A
   assim_quad_soln <- function(., V, K ) {
     gsd <- get(paste0(.$fnames$rs,'_fe'))(.) / .$state$ca
     p   <- .$env$atm_press*1e-6
     a   <- p*( 1.6 - gsd*(.$state$ca + K) )
-    b   <- p*gsd*( .$state$ca*(V - .$state$rd) - .$state$rd*K - V*.$state_pars$gstar ) - .$pars$g0*(.$state$ca + K) + 1.6*p*(.$state$rd - V)
-    c   <- .$pars$g0*( V*(.$state$ca - .$state_pars$gstar) - .$state$rd*(K + .$state$ca) )
+    b   <- p*gsd*( .$state$ca*(V - .$state$rd) - .$state$rd*K - V*.$state_pars$gstar ) - g0*(.$state$ca + K) + 1.6*p*(.$state$rd - V)
+    c   <- g0*( V*(.$state$ca - .$state_pars$gstar) - .$state$rd*(K + .$state$ca) )
  
     # return A 
     quad_sol(a,b,c,'upper')
   }
 
-  .$state$Acg <- assim_quad_soln(., V=.$state_pars$vcmaxlt, K=.$state_pars$Km )
-  .$state$Ajg <- assim_quad_soln(., V=(.$state$J/4),        K=(2*.$state_pars$gstar) )
-  .$state$Apg <- assim_quad_soln(., V=(3*.$state_pars$tpu), K=(-(1+3*.$pars$Apg_alpha)*.$state_pars$gstar) )
+  .$state$Acg[] <- assim_quad_soln(., V=.$state_pars$vcmaxlt, K=.$state_pars$Km )
+  .$state$Ajg[] <- assim_quad_soln(., V=(.$state$J/4),        K=(2*.$state_pars$gstar) )
+  .$state$Apg[] <- assim_quad_soln(., V=(3*.$state_pars$tpu), K=(-(1+3*.$pars$Apg_alpha)*.$state_pars$gstar) )
 
   # determine rate limiting cycle - this is done based on carboxylation, not net assimilation (Gu etal 2010).
   Amin        <- get(.$fnames$Alim)(.) 
   
   # determine cc/ci based on Amin
   # calculate rs
-  .$pars$g0[]     <- g0_hold 
+  #.$pars$g0[]     <- g0_hold 
   .$state_pars$rs[] <- get(.$fnames$rs)(.,A=Amin)
   .$state$cc[] <-.$state$ci[] <- f_ficks_ci(., A=Amin, r=1.6*.$state_pars$rs )
     
