@@ -124,32 +124,49 @@ f_A_r_leaf_semiana_quad <- function(.) {
       r=( 1.4*.$state_pars$rb + 1.6*get(.$fnames$rs)(.,A=.$state$aguess[1],c=get(.$fnames$gas_diff)(.,.$state$aguess[1])) + .$state_pars$ri ) )
     .$state$aguess[2]  <- f_assimilation(.) 
     .$state$faguess[2] <- get(.$fnames$solver_func)(., .$state$aguess[2] ) 
+  }
+
+  # if both a1 and a2 are below zero then return -1 and leafsys routine will calculate A assuming gs = g0
+  if(.$state$aguess[1]<0 & .$state$aguess[2]<0) return(-1.01)
+  else {
 
     # third guess
     .$state$aguess[3]  <- mean(.$state$aguess[1:2])  
     .$state$faguess[3] <- get(.$fnames$solver_func)(., .$state$aguess[3] ) 
 
     # check that fa2 and fa1 span 0, if not reguess for fa3 until it and fa1 span zero and then take the mean a1 and a3 to find a2
+    # under conditions tested so far this is only necessary for Ball-Berry gs
     if(prod(.$state$faguess[1:2]) > 0) {
+      print('')
       print('fa1 and fa2 do not span zero')
-      print(c('faguess 1-3,',round(.$state$faguess[1:3],4),'aguess 1-3,',round(.$state$aguess[1:3],4)))
-      
-      while(.$state$faguess[3]>0) {
-        .$state$aguess[3]  <- .$state$aguess[3] + 0.01  
-        .$state$faguess[3] <- get(.$fnames$solver_func)(., .$state$aguess[3] ) 
+      print(c('faguess 1-3:',round(.$state$faguess[1:3],4)))
+      print(c( 'aguess 1-3:',round(.$state$aguess[1:3],4)))
+     
+
+      if(.$state$faguess[1] > 0 ) { 
+        while(.$state$faguess[3]>0) {
+          .$state$aguess[3]  <- .$state$aguess[3] + 0.01  
+          .$state$faguess[3] <- get(.$fnames$solver_func)(., .$state$aguess[3] ) 
+        }
+      } else {
+        while(.$state$faguess[3] < 0) {
+          .$state$aguess[3]  <- .$state$aguess[3] - 0.01  
+          .$state$faguess[3] <- get(.$fnames$solver_func)(., .$state$aguess[3] ) 
+        }
       }
 
       .$state$aguess[2]  <- mean(.$state$aguess[c(1,3)])
       .$state$faguess[2] <- get(.$fnames$solver_func)(., .$state$aguess[2] ) 
 
       # reporting for development 
-      sinput <- seq(.$state$aguess[1]-2,.$state$aguess[1]+2,0.1 )
-      out    <- numeric(length(sinput))
-      for( i in 1:length(sinput) ) {
-        out[i] <- f_A_r_leaf(., A=sinput[i] )
+      a  <- seq(.$state$aguess[1]-2,.$state$aguess[1]+2,0.1 )
+      resid <- numeric(length(a))
+      for( i in 1:length(a) ) {
+        resid[i] <- f_A_r_leaf(., A=a[i] )
       }
-      print(c('faguess,',round(.$state$faguess[1:3],4),'aguess,',round(.$state$aguess[1:3],4)))
-      print(cbind(sinput,out))
+      print(c('faguess 1-3:',round(.$state$faguess[1:3],4)))
+      print(c( 'aguess 1-3:',round(.$state$aguess[1:3],4)))
+      print(cbind(a,resid))
 
       # over-cautious safety - with while condition above should be no way that this condition is true
       if(prod(.$state$faguess[c(1,3)]) > 0) stop('failed')
@@ -222,12 +239,17 @@ f_A_r_leaf_semiana_brent <- function(.) {
   if(abs(.$state$faguess[1]) < 1e-6) return(.$state$aguess[1])
   else {
  
-    # second guess, also analytical, use initial guess to calculate cc, then calculate A from this cc value
+    # second guess, also analytical
     .$state$cc[] <- get(.$fnames$gas_diff)( . , .$state$aguess[1] , 
       r=( 1.4*.$state_pars$rb + 1.6*get(.$fnames$rs)(.,A=.$state$aguess[1],c=get(.$fnames$gas_diff)(.,.$state$aguess[1])) + .$state_pars$ri ) )
     .$state$aguess[2]  <- f_assimilation(.) 
     .$state$faguess[2] <- get(.$fnames$solver_func)(., .$state$aguess[2] ) 
+  }
 
+  # if both a1 and a2 are below zero then return -1 and leafsys routine will calculate A assuming gs = g0
+  if(.$state$aguess[1]<0 & .$state$aguess[2]<0) return(-1.01)
+  else {
+ 
     # check that fa2 and fa1 span 0, if not reguess for fa3 until it and fa1 span zero and then take the mean a1 and a3 to find a2
     if(prod(.$state$faguess[1:2]) > 0) {
       print('fa1 and fa2 do not span zero')
@@ -235,7 +257,8 @@ f_A_r_leaf_semiana_brent <- function(.) {
       # third guess
       .$state$aguess[3]  <- mean(.$state$aguess[1:2])  
       .$state$faguess[3] <- get(.$fnames$solver_func)(., .$state$aguess[3] ) 
-      print(c('faguess,',round(.$state$faguess[1:3],4),'aguess,',round(.$state$aguess[1:3],4)))
+      print(c('faguess 1-3:',round(.$state$faguess[1:3],4)))
+      print(c( 'aguess 1-3:',round(.$state$aguess[1:3],4)))
       
       while(.$state$faguess[3]>0) {
         .$state$aguess[3]  <- .$state$aguess[3] + 0.01  
@@ -246,13 +269,14 @@ f_A_r_leaf_semiana_brent <- function(.) {
       .$state$faguess[2] <- get(.$fnames$solver_func)(., .$state$aguess[2] ) 
       
       # reporting for development 
-      sinput <- seq(.$state$aguess[1]-2,.$state$aguess[1]+2,0.1 )
-      out    <- numeric(length(sinput))
-      for( i in 1:length(sinput) ) {
-        out[i] <- f_A_r_leaf(., A=sinput[i] )
+      a  <- seq(.$state$aguess[1]-2,.$state$aguess[1]+2,0.1 )
+      resid <- numeric(length(a))
+      for( i in 1:length(a) ) {
+        resid[i] <- f_A_r_leaf(., A=a[i] )
       }
-      print(c('faguess,',round(.$state$faguess[1:3],4),'aguess,',round(.$state$aguess[1:3],4)))
-      print(cbind(sinput,out))
+      print(c('faguess 1-3:',round(.$state$faguess[1:3],4)))
+      print(c( 'aguess 1-3:',round(.$state$aguess[1:3],4)))
+      print(cbind(a,resid))
   
       # over-cautious safety - with while condition above should be no way that this condition is true
       if(prod(.$state$faguess[c(1,3)]) > 0) stop('failed')
