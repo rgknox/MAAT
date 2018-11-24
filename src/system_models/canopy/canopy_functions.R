@@ -82,6 +82,10 @@ f_pars_init <- function(.) {
   .$state_pars$m[]           <- (1.0-.$state_pars$lscattering)^0.5
   .$state_pars$k_dirprime[]  <- .$state_pars$m * .$state_pars$k_dir
   .$state_pars$k_diffprime[] <- .$state_pars$m * .$state_pars$k_diff
+
+  # calculate Vcmax0 and extinction coefficient for Vcmax
+  .$state$vcmax0[]           <- get(.$fnames$vcmax0)(.)
+  .$state_pars$k_vcmax[]     <- get(.$fnames$k_vcmax)(.)
 }
 
 
@@ -157,6 +161,31 @@ f_scale_n_beerslaw <- function(.,l) {
   .$state$totalN * exp(-.$state_pars$k_dir*l) /  sum(exp(-.$state_pars$k_dir*1:.$state$lai))  
 }
 
+
+# Vcmax Scaling
+################################
+
+f_vcmax0_constant <- function(.) {
+  .$leaf$fnames$vcmax <- 'f_vcmax_constant'
+  .$pars$vcmax0
+}
+
+# Use Beer's Law to scale leaf vcmax through the canopy 
+f_scale_vcmax_beerslaw <- function(.,l) {
+  # for use with a multilayer phototsynthesis scheme
+  
+  .$state$vcmax0 * exp(-.$state_pars$k_vcmax*l) 
+}
+
+f_scale_vcmax_uniform <- function(., layers ) {
+  rep(.$state$vcmax0, length(layers) ) 
+}
+
+f_k_vcmax_constant  <- function(.) .$pars$k_vcmax
+
+f_k_vcmax_lloyd2012 <- function(.) {
+   exp( .$pars$k_vcmax_expa + .$pars$k_vcmax_expb*.$state$vcmax0 )
+}
 
 
 # Canopy Environment 
