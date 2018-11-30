@@ -124,10 +124,6 @@ wrapper_object <-
       } else {
         # not a formal SA/UQ run - factorial combination of variables specified in the vars lists  
         .$dataf$pars <- if(!is.null(.$dynamic$pars)) as.matrix(expand.grid(.$dynamic$pars,stringsAsFactors=F)) else NULL
-        print(.$dynamic$pars) 
-        print(.$dataf$pars)
-        print(.$dynamic$env) 
-        print(.$dataf$env)
       } 
       
       # calculate input matrix lengths 
@@ -259,11 +255,23 @@ wrapper_object <-
       if(!is.null(.$dataf$fnames)) .$model$configure(vlist='fnames', df=.$dataf$fnames[i,], F )
       if(.$wpars$cverbose)         .$printc('fnames', .$dataf$fnames[i,] )
 
+      # initialise time matrix
+      if(i==1) .$dataf$time <- data.frame(.$dataf$fnames, t(system.time(x<-1)[c(1,3)]) , stringsAsFactors = F ) 
+
       # call next run function
+      st <- system.time(
+      #return(
+      y <- 
       do.call( 'rbind', {
           if(.$wpars$multic) mclapply(1:.$dataf$lp, .$runp, mc.cores=max(1,floor(.$wpars$procs/.$dataf$lf)), mc.preschedule=T  )
           else                 lapply(1:.$dataf$lp, .$runp )
       })
+      )
+      #)
+      .$dataf$time[i,4:5] <- st[c(1,3)]
+      #print(class(st[c(1,3)]))
+      #print(st[c(1,3)])
+      y
     }
     
     runp <- function(.,j) {

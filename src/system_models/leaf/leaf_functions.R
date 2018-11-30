@@ -1,4 +1,4 @@
-################################
+###############################
 #
 # Leaf level physiology functions
 # 
@@ -38,8 +38,8 @@ f_R_Brent_solver_diag_brackets <- function(., brackets ) {
   if(.$cpars$verbose_loop) print(.$env) 
 
   .$solver_out        <- uniroot(get(.$fnames$solver_func), interval=brackets, .=. )
-  .$state$iter[]      <- .$solver_out$iter
-  .$state$estimprec[] <- .$solver_out$estim.prec
+  #.$state$iter[]      <- .$solver_out$iter
+  #.$state$estimprec[] <- .$solver_out$estim.prec
   .$solver_out$root
 }
 
@@ -73,7 +73,7 @@ f_A_r_leaf <- function(., A ) {
   # total resistance of a set of resistors in series is simply their sum 
   # assumes boundary layer and stomatal resistance terms are in h2o units
   # assumes mesophyll resistance is in co2 units
-  .$state$cc <- get(.$fnames$gas_diff)( . , A , r=( 1.4*.$state_pars$rb + 1.6*get(.$fnames$rs)(.,A=A,c=get(.$fnames$gas_diff)(.,A)) + .$state_pars$ri ) )
+  .$state$cc[] <- get(.$fnames$gas_diff)( . , A , r=( 1.4*.$state_pars$rb + 1.6*get(.$fnames$rs)(.,A=A,c=get(.$fnames$gas_diff)(.,A)) + .$state_pars$ri ) )
   
   #print(c(A,f_assimilation(.)))
   
@@ -106,29 +106,31 @@ f_A_r_leaf_semiana_quad <- function(.) {
   # - fit a quadratic through the three sets of co-ordinates to find the root 
  
   # find the analytical solution assuming rb and ri are zero to use as first guess (a1)
-  .$state$aguess[1]  <- .$state$A_ana_rbzero <- f_A_r_leaf_analytical_quad(.)
+  #.$state$aguess[1]  <- .$state$A_ana_rbzero[] <- f_A_r_leaf_analytical_quad(.)
+  .$state$aguess[1]  <- .$state$A_ana_rbzero[] <- f_A_r_leaf_analytical(.)
   .$state$faguess[1] <- f_A_r_leaf(., .$state$aguess[1] ) 
 
-  # reporting for development 
-  if(is.na(.$state$faguess[1])) {
-    print('')
-    print(c(.$state$aguess[1],.$state$faguess[1]))
-    print(unlist(.$fnames)); print(unlist(.$pars)); print(unlist(.$state_pars)); print(unlist(.$state)); print(unlist(.$env)) 
-  }
- 
-  if(abs(.$state$faguess[1]) < 1e-6) return(.$state$aguess[1])
+  if(.$state$aguess[1] == -999 ) return(-1.01) 
+  else if(abs(.$state$faguess[1]) < 1e-6) return(.$state$aguess[1])
   else {
  
     # second guess, also analytical
     .$state$cc[] <- get(.$fnames$gas_diff)( . , .$state$aguess[1] , 
       r=( 1.4*.$state_pars$rb + 1.6*get(.$fnames$rs)(.,A=.$state$aguess[1],c=get(.$fnames$gas_diff)(.,.$state$aguess[1])) + .$state_pars$ri ) )
     .$state$aguess[2]  <- f_assimilation(.) 
-    .$state$faguess[2] <- get(.$fnames$solver_func)(., .$state$aguess[2] ) 
-  }
+    if(.$state$cc<0&F) {
+      print('')
+      print(c(.$state$cc, .$state$aguess[1], .$state$aguess[2] ))
+    }
+    #.$state$faguess[2] <- get(.$fnames$solver_func)(., .$state$aguess[2] ) 
+  
 
   # if both a1 and a2 are below zero then return -1 and leafsys routine will calculate A assuming gs = g0
-  if(.$state$aguess[1]<0 & .$state$aguess[2]<0) return(-1.01)
+  if(.$state$aguess[1]<0 & (.$state$aguess[2]<0|.$state$cc<0) ) return(-1.01)
   else {
+
+    # calculate residual of second guess
+    .$state$faguess[2] <- get(.$fnames$solver_func)(., .$state$aguess[2] ) 
 
     # third guess
     .$state$aguess[3]  <- mean(.$state$aguess[1:2])  
@@ -138,7 +140,8 @@ f_A_r_leaf_semiana_quad <- function(.) {
     # under conditions tested so far this is only necessary for Ball-Berry gs
     if(prod(.$state$faguess[1:2]) > 0) {
       print('')
-      print('fa1 and fa2 do not span zero')
+      print('fa1 and fa2 do not span zero quad')
+      print(.$state_pars); print(.$env) 
       print(c('faguess 1-3:',round(.$state$faguess[1:3],4)))
       print(c( 'aguess 1-3:',round(.$state$aguess[1:3],4)))
      
@@ -211,7 +214,7 @@ f_A_r_leaf_semiana_quad <- function(.) {
     if(length(ss)==0)      stop('no solution,',.$state$assim,'; within initial 3 guesses,',.$state$aguess[1:3],'fguesses,',.$state$faguess[1:3] ) 
     else if(length(ss)==2) stop('both solutions,',.$state$assim,'; within initial 3 guesses,',.$state$aguess[1:3],'fguesses,',.$state$faguess[1:3] ) 
     else return(.$state$assim[ss])
-  }
+  }}
 }
 
 # Clean semi-analytical solution 
@@ -226,37 +229,39 @@ f_A_r_leaf_semiana_brent <- function(.) {
   # - pass the two guesses (either a1 and a2 OR a1 and a3) as brackets to the Brent solver 
  
   # find the analytical solution assuming rb and ri are zero to use as first guess (a1)
-  .$state$aguess[1]  <- .$state$A_ana_rbzero <- f_A_r_leaf_analytical_quad(.)
+  #.$state$aguess[1]  <- .$state$A_ana_rbzero[] <- f_A_r_leaf_analytical_quad(.)
+  .$state$aguess[1]  <- .$state$A_ana_rbzero[] <- f_A_r_leaf_analytical(.)
   .$state$faguess[1] <- f_A_r_leaf(., .$state$aguess[1] ) 
+  #.$state$faguess[1] <- get(.$fnames$solver_func)(., .$state$aguess[1] ) 
  
-  # reporting for development 
-  if(is.na(.$state$faguess[1])) {
-    print('')
-    print(c(.$state$aguess[1],.$state$faguess[1]))
-    print(unlist(.$fnames)); print(unlist(.$pars)); print(unlist(.$state_pars)); print(unlist(.$state)); print(unlist(.$env)) 
-  }
- 
-  if(abs(.$state$faguess[1]) < 1e-6) return(.$state$aguess[1])
+  if(.$state$aguess[1] == -999 ) return(-1.01) 
+  else if(abs(.$state$faguess[1]) < 1e-6) return(.$state$aguess[1])
   else {
  
     # second guess, also analytical
     .$state$cc[] <- get(.$fnames$gas_diff)( . , .$state$aguess[1] , 
       r=( 1.4*.$state_pars$rb + 1.6*get(.$fnames$rs)(.,A=.$state$aguess[1],c=get(.$fnames$gas_diff)(.,.$state$aguess[1])) + .$state_pars$ri ) )
     .$state$aguess[2]  <- f_assimilation(.) 
-    .$state$faguess[2] <- get(.$fnames$solver_func)(., .$state$aguess[2] ) 
-  }
+    #.$state$faguess[2] <- get(.$fnames$solver_func)(., .$state$aguess[2] ) 
+  
 
   # if both a1 and a2 are below zero then return -1 and leafsys routine will calculate A assuming gs = g0
-  if(.$state$aguess[1]<0 & .$state$aguess[2]<0) return(-1.01)
+  #if(.$state$aguess[1]<0 & .$state$aguess[2]<0) return(-1.01)
+  #else {
+  if(.$state$aguess[1]<0 & (.$state$aguess[2]<0|.$state$cc<0) ) return(-1.01)
   else {
+
+    # calculate residual of second guess
+    .$state$faguess[2] <- get(.$fnames$solver_func)(., .$state$aguess[2] ) 
  
     # check that fa2 and fa1 span 0, if not reguess for fa3 until it and fa1 span zero and then take the mean a1 and a3 to find a2
     if(prod(.$state$faguess[1:2]) > 0) {
-      print('fa1 and fa2 do not span zero')
+      print('fa1 and fa2 do not span zero brent')
       
       # third guess
       .$state$aguess[3]  <- mean(.$state$aguess[1:2])  
       .$state$faguess[3] <- get(.$fnames$solver_func)(., .$state$aguess[3] ) 
+      print(.$state_pars); print(.$env) 
       print(c('faguess 1-3:',round(.$state$faguess[1:3],4)))
       print(c( 'aguess 1-3:',round(.$state$aguess[1:3],4)))
       
@@ -289,7 +294,7 @@ f_A_r_leaf_semiana_brent <- function(.) {
   
     # Now brackets are available that span the root of the residual function, find the root using the Brent solver
     f_R_Brent_solver_diag_brackets(., brackets )
-  }
+  }}
 }
 
 
@@ -308,17 +313,20 @@ f_A_r_leaf_analytical <- function(.) {
   # calculate cb, ci & cc
   .$state$cb      <- .$state$ca
   fe              <- get(paste0(.$fnames$rs,'_fe') )(.) 
-  .$state$ci      <- .$state$ca * (1 - (1.6 / fe) )
-  .$state$cc      <- .$state$ci 
+  if(fe<=1.6) return(-999)   
+  else {
+    .$state$ci      <- .$state$ca * (1 - (1.6 / fe) )
+    .$state$cc      <- .$state$ci 
  
-  # calculate net A
-  Anet <- f_assimilation(.)
+    # calculate net A
+    Anet <- f_assimilation(.)
   
-  # calculate rs
-  .$state_pars$rs <- .$state$ca / (fe * Anet * .$env$atm_press*1e-6) 
+    # calculate rs
+    .$state_pars$rs <- .$state$ca / (fe * Anet * .$env$atm_press*1e-6) 
   
-  # return net A
-  Anet
+    # return net A
+    return(Anet)
+  }
 }
 
 

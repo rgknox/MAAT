@@ -172,7 +172,7 @@ f_vcmax0_constant <- function(.) {
 
 # Use Beer's Law to scale leaf vcmax through the canopy 
 f_scale_vcmax_beerslaw <- function(.,l) {
-  # for use with a multilayer phototsynthesis scheme
+  # for use with a multilayer photosynthesis scheme
   
   .$state$vcmax0 * exp(-.$state_pars$k_vcmax*l) 
 }

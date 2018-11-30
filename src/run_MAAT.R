@@ -363,6 +363,7 @@ if(factorial) {
   setwd(odir)
   df_out <- maat$output()
   write_to_file(df_out,ofname,type=of_format)  
+  write_to_file(maat$dataf$time,paste0('time_',ofname),type='csv')  
   
   rm(df_out)
   maat$clean()
