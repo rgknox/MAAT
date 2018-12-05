@@ -110,14 +110,16 @@ f_A_r_leaf_semiana_quad <- function(.) {
   .$state$aguess[1]  <- .$state$A_ana_rbzero[] <- f_A_r_leaf_analytical(.)
   .$state$faguess[1] <- f_A_r_leaf(., .$state$aguess[1] ) 
 
-  if(.$state$aguess[1] == -999 ) return(-1.01) 
+  if(.$state$aguess[1] == -999)  return(-1.01) 
+  else if(.$state$aguess[1] < 0) return(-1.01)
   else if(abs(.$state$faguess[1]) < 1e-6) return(.$state$aguess[1])
   else {
  
     # second guess, also analytical
-    .$state$cc[] <- get(.$fnames$gas_diff)( . , .$state$aguess[1] , 
-      r=( 1.4*.$state_pars$rb + 1.6*get(.$fnames$rs)(.,A=.$state$aguess[1],c=get(.$fnames$gas_diff)(.,.$state$aguess[1])) + .$state_pars$ri ) )
-    .$state$aguess[2]  <- f_assimilation(.) 
+    #.$state$cc[] <- get(.$fnames$gas_diff)( . , .$state$aguess[1] , 
+    #  r=( 1.4*.$state_pars$rb + 1.6*get(.$fnames$rs)(.,A=.$state$aguess[1],c=get(.$fnames$gas_diff)(.,.$state$aguess[1])) + .$state_pars$ri ) )
+    #.$state$aguess[2]  <- f_assimilation(.) 
+    .$state$aguess[2]  <- .$state$faguess[1] + .$state$aguess[1]  
     if(.$state$cc<0&F) {
       print('')
       print(c(.$state$cc, .$state$aguess[1], .$state$aguess[2] ))
@@ -126,7 +128,8 @@ f_A_r_leaf_semiana_quad <- function(.) {
   
 
   # if both a1 and a2 are below zero then return -1 and leafsys routine will calculate A assuming gs = g0
-  if(.$state$aguess[1]<0 & (.$state$aguess[2]<0|.$state$cc<0) ) return(-1.01)
+  if(.$state$cc < 0) return(-1.01)
+  #if(.$state$aguess[1]<0 & (.$state$aguess[2]<0|.$state$cc<0) ) return(-1.01)
   else {
 
     # calculate residual of second guess
@@ -220,7 +223,7 @@ f_A_r_leaf_semiana_quad <- function(.) {
 # Clean semi-analytical solution 
 f_A_r_leaf_semiana_brent <- function(.) {
   # - finds the analytical solution assuming rb and ri are zero to use as first guess (a1)
-  # - make a second guess (a2) by calculating Cc using a0 and actual values of rb and ri   
+  # - make a second guess (a2) by calculating Cc using a1 and actual values of rb and ri   
   # - calculate residual function value for these two guesses (fa1, fa2) 
   # - check these span the root
   # - if not, make a third guess (a3) by taking the mean of a1 and a2 and calculate residual (fa3) 
@@ -235,20 +238,22 @@ f_A_r_leaf_semiana_brent <- function(.) {
   #.$state$faguess[1] <- get(.$fnames$solver_func)(., .$state$aguess[1] ) 
  
   if(.$state$aguess[1] == -999 ) return(-1.01) 
+  else if(.$state$aguess[1] < 0) return(-1.01)
   else if(abs(.$state$faguess[1]) < 1e-6) return(.$state$aguess[1])
   else {
  
     # second guess, also analytical
-    .$state$cc[] <- get(.$fnames$gas_diff)( . , .$state$aguess[1] , 
-      r=( 1.4*.$state_pars$rb + 1.6*get(.$fnames$rs)(.,A=.$state$aguess[1],c=get(.$fnames$gas_diff)(.,.$state$aguess[1])) + .$state_pars$ri ) )
-    .$state$aguess[2]  <- f_assimilation(.) 
+    #.$state$cc[] <- get(.$fnames$gas_diff)( . , .$state$aguess[1] , 
+    #  r=( 1.4*.$state_pars$rb + 1.6*get(.$fnames$rs)(.,A=.$state$aguess[1],c=get(.$fnames$gas_diff)(.,.$state$aguess[1])) + .$state_pars$ri ) )
+    #.$state$aguess[2]  <- f_assimilation(.) 
     #.$state$faguess[2] <- get(.$fnames$solver_func)(., .$state$aguess[2] ) 
-  
+    .$state$aguess[2]  <- .$state$faguess[1] + .$state$aguess[1]  
 
   # if both a1 and a2 are below zero then return -1 and leafsys routine will calculate A assuming gs = g0
   #if(.$state$aguess[1]<0 & .$state$aguess[2]<0) return(-1.01)
   #else {
-  if(.$state$aguess[1]<0 & (.$state$aguess[2]<0|.$state$cc<0) ) return(-1.01)
+  #if(.$state$aguess[1]<0 & (.$state$aguess[2]<0|.$state$cc<0) ) return(-1.01)
+  if(.$state$cc < 0) return(-1.01)
   else {
 
     # calculate residual of second guess
@@ -356,6 +361,7 @@ f_A_r_leaf_analytical_quad <- function(.) {
     quad_sol(a,b,c,'upper')
   }
 
+  # calculate Anet for each limiting rate, use Agross variables as place holders
   .$state$Acg[] <- assim_quad_soln(., V=.$state_pars$vcmaxlt, K=.$state_pars$Km )
   .$state$Ajg[] <- assim_quad_soln(., V=(.$state$J/4),        K=(2*.$state_pars$gstar) )
   .$state$Apg[] <- assim_quad_soln(., V=(3*.$state_pars$tpu), K=(-(1+3*.$pars$Apg_alpha)*.$state_pars$gstar) )
@@ -399,6 +405,7 @@ f_A_r0_leaf_analytical_quad <- function(.) {
     quad_sol(a,b,c,'lower')
   }
 
+  # calculate Anet for each limiting rate, use Agross variables as place holders
   .$state$Acg <- assim_quad_soln(., V=.$state_pars$vcmaxlt, K=.$state_pars$Km )
   .$state$Ajg <- assim_quad_soln(., V=(.$state$J/4),        K=(2*.$state_pars$gstar) )
   .$state$Apg <- assim_quad_soln(., V=(3*.$state_pars$tpu), K=(-(1+3*.$pars$Apg_alpha)*.$state_pars$gstar) )
@@ -409,7 +416,7 @@ f_A_r0_leaf_analytical_quad <- function(.) {
   # determine cc/ci based on Amin
   .$state_pars$rs <- r0 
   .$state$cb <- f_ficks_ci(., A=Amin )
-  .$state$cc <-.$state$ci <- f_ficks_ci(., A=Amin, r=1.6*.$state_pars$rs )
+  .$state$cc <-.$state$ci <- f_ficks_ci(., A=Amin, r=1.6*.$state_pars$rs, c=.$state$cb )
     
   # recalculate Ag for each limiting process
   # necessary if Alim is Collatz smoothing as it reduces A, decoupling A from cc calculated in the quadratic solution 
